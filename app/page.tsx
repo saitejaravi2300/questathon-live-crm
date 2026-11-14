@@ -268,6 +268,7 @@ export default function Home() {
     notes: [],
   });
   const [loading, setLoading] = useState(false);
+  const [syncingResource, setSyncingResource] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState("");
   const [noteText, setNoteText] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
@@ -295,29 +296,34 @@ export default function Home() {
     }
   };
 
-  const syncAll = async () => {
+  const fetchResource = async (resource: string, label: string) => {
+    if (loading) return;
     setLoading(true);
-    setSyncMessage("Refreshing live signals...");
+    setSyncingResource(resource);
+    setSyncMessage(`Fetching ${label}...`);
     try {
       const response = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resource: "signals" }),
+        body: JSON.stringify({ resource }),
         cache: "no-store",
       });
       const data = await response.json();
       if (!response.ok) {
-        setSyncMessage(data.error ?? "Sync failed. Try again later.");
+        setSyncMessage(data.error ?? `Unable to fetch ${label}. Try again later.`);
       } else {
-        setSyncMessage(data.message ?? "Live signals refreshed.");
+        setSyncMessage(data.message ?? `${label} fetched successfully.`);
       }
       await refreshState();
     } catch (error) {
-      setSyncMessage("Unable to sync. Check the server terminal.");
+      setSyncMessage(`Unable to fetch ${label}. Check the deployment logs.`);
     } finally {
       setLoading(false);
+      setSyncingResource(null);
     }
   };
+
+  const syncAll = async () => fetchResource("signals", "Live events");
 
   const pollSignals = async () => {
     try {
@@ -798,9 +804,9 @@ export default function Home() {
               <div>
                 <h2>Evidence room</h2>
                 <p>
-                  Cached source responses from the Questathon API. Use the
-                  source record as the authority; summaries are not a
-                  substitute for the original evidence.
+                  Cached source responses from the Questathon API. Fetch each
+                  resource separately; the API allows one upstream request per
+                  minute. Use the source record as the authority.
                 </p>
               </div>
               <Pill tone="blue">{loadedCount} resources loaded</Pill>
@@ -824,11 +830,18 @@ export default function Home() {
                       {evidenceData[key] ? "Loaded" : "Waiting"}
                     </Pill>
                   </div>
+                  <button
+                    className="text-button"
+                    onClick={() => fetchResource(key, label)}
+                    disabled={loading}
+                  >
+                    {syncingResource === key ? "Fetching..." : evidenceData[key] ? "Fetch again" : "Fetch resource"}
+                  </button>
                   {evidenceData[key] ? (
                     <JsonEvidence title={label} data={evidenceData[key]} />
                   ) : (
                     <div className="empty-state">
-                      No cached response. Use Refresh data.
+                      No cached response yet. Select Fetch resource above.
                     </div>
                   )}
                 </div>
